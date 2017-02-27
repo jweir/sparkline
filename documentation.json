@@ -1,0 +1,81 @@
+[
+  {
+    "name": "Sparkline",
+    "comment": " This library is for generating inline graphs, called sparklines.\n\n# Definition\n@docs sparkline, Param\n\n# Data types\n@docs Point, DataSet, Size\n\n",
+    "aliases": [
+      {
+        "name": "DataSet",
+        "comment": " The data to be rendered.\n",
+        "args": [],
+        "type": "List Sparkline.Point"
+      },
+      {
+        "name": "Point",
+        "comment": " Tuple of (x,y) value\n",
+        "args": [],
+        "type": "( Float, Float )"
+      },
+      {
+        "name": "Size",
+        "comment": " Defines the size of the graph (width, height, topBottomMargin, leftRightMargin)\n",
+        "args": [],
+        "type": "( Float, Float, Float, Float )"
+      }
+    ],
+    "types": [
+      {
+        "name": "Param",
+        "comment": " Drawing a sparkline occurs by passing params\n\n          -- data is tuples with (x,y) values as floats\n          data = [(0,0),(5,10),(10,12)]\n          data2 = [(0,-5),(7,2),(12,14)]\n\n          sparkline\n          (100,10,5,5)    -- the width, height, top/bottom margin, left/right margin\n          [ Line data ]   -- type of graph to draw with the data\n\nMultiple params can be included to have muliple graphs. Each will have its data\nscaled relatively to one another. The graphs are drawn in the order they are\ngiven. So last graph will be drawn on top.\n\n          sparkline\n          (100,10,5,5)    -- the width, height, top/bottom margin, left/right margin\n          [ Line data\n          , Line data2\n          ]\n\nThe three types of graphs are\n* **Line** creates a line graph\n* **Dot** draws a dot at each point.  Set the radius of the dot by styline it `Style |> [Svg.r \"3\"]`\n* **Bar** <BarWidth> Draws a bar graph.  This requires defining what the width of the bar.\n\nThere are also some options which can be applied to each graph:\n* **Independent** will scale this graph's dataset separately from the rest of the graphs.\n* **Style** allows apply `Svg.Attribute` styles to the rendered svg.\n\nFinally there is the **ZeroLine** param which will draw a line at the 0 y axis\nfor the data. *This does not apply to any graphs rendered with\n**Independent.***\n\n**Examples**\n\n        -- style a ZeroLine to be very light\n        sparkline\n            ( 200, 5, 5, 5 )\n            [ ZeroLine |> Style [ Svg.strokeWidth \"0.5\", Svg.stroke \"rgba(0,0,0,0.3)\" ]\n            , Bar 20 [ ( 0, 2 ) , ( 10, 30 ) , ( 20, 10 ) ]\n            ]\n\n",
+        "args": [
+          "a"
+        ],
+        "cases": [
+          [
+            "Bar",
+            [
+              "Float",
+              "Sparkline.DataSet"
+            ]
+          ],
+          [
+            "Dot",
+            [
+              "Sparkline.DataSet"
+            ]
+          ],
+          [
+            "Line",
+            [
+              "Sparkline.DataSet"
+            ]
+          ],
+          [
+            "ZeroLine",
+            []
+          ],
+          [
+            "Independent",
+            [
+              "Sparkline.Param a"
+            ]
+          ],
+          [
+            "Style",
+            [
+              "List (Svg.Attribute a)",
+              "Sparkline.Param a"
+            ]
+          ]
+        ]
+      }
+    ],
+    "values": [
+      {
+        "name": "sparkline",
+        "comment": " The entry point to create a graph. See Param.\n",
+        "type": "Sparkline.Size -> List (Sparkline.Param a) -> Svg.Svg a"
+      }
+    ],
+    "generated-with-elm-version": "0.18.0"
+  }
+]
