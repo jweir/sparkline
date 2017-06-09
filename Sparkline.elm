@@ -124,7 +124,11 @@ type alias Domain =
 
 
 type alias Method a =
-    Domain -> Range -> List (Svg.Attribute a) -> DataSet -> List (Svg a)
+    DataSet
+    -> List (Svg.Attribute a)
+    -> Domain
+    -> Range
+    -> List (Svg a)
 
 
 
@@ -138,36 +142,52 @@ type alias Method a =
 sparkline : Size -> List (Param a) -> Svg a
 sparkline size params =
     let
+        tokens : List ( Method a, DataSet, List (Svg.Attribute a), IndySet )
         tokens =
-            List.map (splitter) params
+            List.map (tokenizer) params
 
+        domain_ : Domain
         domain_ =
             tokens
                 |> List.filter (\( _, _, _, indy ) -> indy /= True)
                 |> List.concatMap (\( _, data, _, _ ) -> [ data ])
                 |> domain
 
-        -- calc the range in the metod, bar needs the size before calcing the range
+        -- calc the range in the method, bar needs the size before calcing the range
+        range_ : Range
         range_ =
             range size domain_
 
+        collector : ( Method a, DataSet, List (Svg.Attribute a), IndySet ) -> List (Svg a)
         collector ( method, data, attr, indy ) =
-            if indy == True then
-                let
-                    dom =
-                        domain [ data ]
-                in
-                    method dom (range size dom) attr data
-            else
-                method domain_ range_ attr data
+            let
+                ( cdom, crange ) =
+                    if indy == True then
+                        ( domain [ data ]
+                        , (range size (domain [ data ]))
+                        )
+                    else
+                        ( domain_, range_ )
+            in
+                method
+                    data
+                    attr
+                    cdom
+                    crange
     in
         tokens
             |> List.concatMap collector
             |> frame size
 
 
-splitter : Param a -> ( Method a, DataSet, List (Svg.Attribute a), Bool )
-splitter msg =
+type alias IndySet =
+    Bool
+
+
+tokenizer :
+    Param a
+    -> ( Method a, DataSet, List (Svg.Attribute a), IndySet )
+tokenizer msg =
     case msg of
         Bar width data ->
             ( bar width, data, [], False )
@@ -184,14 +204,14 @@ splitter msg =
         Independent msg_ ->
             let
                 ( m, d, a, _ ) =
-                    splitter msg_
+                    tokenizer msg_
             in
                 ( m, d, a, True )
 
         Style attr msg_ ->
             let
                 ( m, d, _, i ) =
-                    splitter msg_
+                    tokenizer msg_
             in
                 ( m, d, attr, i )
 
@@ -199,22 +219,32 @@ splitter msg =
 frame : Size -> List (Svg a) -> Svg a
 frame ( w, h, ms, mt ) items =
     Svg.svg
-        [ A.width := (w + 2 * ms), A.height := (h + 2 * mt), A.viewBox *= [ 0, 0, w + 2 * ms, h + 2 * mt ] ]
-        [ Svg.g [ A.transform ("translate" ++ toString ( ms, mt )) ] items
+        [ A.width := (w + 2 * ms)
+        , A.height := (h + 2 * mt)
+        , A.viewBox *= [ 0, 0, w + 2 * ms, h + 2 * mt ]
+        ]
+        [ Svg.g
+            [ A.transform ("translate" ++ toString ( ms, mt ))
+            ]
+            items
         ]
 
 
 zeroLine : Method a
-zeroLine domain range attr _ =
+zeroLine _ attr domain range =
     let
         ( ( x1, y1 ), ( x2, y2 ) ) =
             domain
     in
-        line domain range attr [ ( x1, 0 ), ( x2, 0 ) ]
+        line
+            [ ( x1, 0 ), ( x2, 0 ) ]
+            attr
+            domain
+            range
 
 
 line : Method a
-line _ range attr data =
+line data attr domain range =
     [ Svg.path
         ([ fill "none"
          , stroke "#000"
@@ -228,7 +258,7 @@ line _ range attr data =
 
 
 dot : Method a
-dot _ range attr data =
+dot data attr _ range =
     data
         |> scale range
         |> List.map
@@ -245,7 +275,7 @@ dot _ range attr data =
 
 
 bar : Float -> Method a
-bar w ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) attr data =
+bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
     data
         |> List.map
             (\( x, y ) ->
