@@ -97,7 +97,7 @@ type Param a
     | Style (List (Svg.Attribute a)) (Param a)
 
 
-{-| Defines the size of the graph (width, height, topBottomMargin, leftRightMargin)
+{-| Defines the size of the graph (width, height, leftRightMargin, topBottomMargin)
 -}
 type alias Size =
     ( Float, Float, Float, Float )
