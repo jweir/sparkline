@@ -38,9 +38,10 @@ main =
             [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "auto" ) ] ]
             [ sparkline ( 100, 5, 5, 15 ) [ Dot data3 ] ]
         , Html.div []
-            [ sparkline ( 200, 10, 5, 5 )
-                [ Style [ Svg.fill "#F00" ] (Dot datax)
-                , Line data
+            [ Html.h3 [] [ Html.text "filled" ]
+            , sparkline ( 200, 10, 5, 5 )
+                [ Area data |> Style [ Svg.fill "#CCC", Svg.stroke "none" ]
+                , Dot datax |> Style [ Svg.fill "#F00" ]
                 ]
             ]
         , Html.div []

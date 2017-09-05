@@ -1,4 +1,5 @@
 # 2.0.0
+Added Area to draw filled shapes
 Added at Label message to print text on the graph.
 Added the Helpers functions.
 Moved examples and code.

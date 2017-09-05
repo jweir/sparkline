@@ -55,8 +55,10 @@ given. So last graph will be drawn on top.
 
 The three types of graphs are
 * **Line** creates a line graph
+* **Area** creates a graph meant to be filled
 * **Dot** draws a dot at each point.  Set the radius of the dot by styline it `|> Style [Svg.r "3"]`
 * **Bar** <BarWidth> Draws a bar graph.  This requires defining what the width of the bar.
+* **Label** plots text on the graph
 
 There are also some options which can be applied to each graph:
 * **Independent** will scale this graph's dataset separately from the rest of the graphs.
@@ -92,7 +94,7 @@ type Param a
     = Bar Float DataSet
     | Dot DataSet
     | Line DataSet
-      -- Area DataSet
+    | Area DataSet
     | Label (LabelSet a)
       -- options
     | ZeroLine
@@ -211,6 +213,9 @@ tokenizer msg =
         Line data ->
             ( line, data, [], False )
 
+        Area data ->
+            ( area, data, [], False )
+
         Label labelSet ->
             let
                 -- map out just the points to use as the underlying data
@@ -276,6 +281,24 @@ line data attr domain range =
         )
         []
     ]
+
+
+area : Method a
+area data attr domain range =
+    let
+        ( ( minx, miny ), ( maxx, maxy ) ) =
+            domain
+
+        p0 =
+            ( minx, miny )
+
+        p1 =
+            ( maxx, miny )
+
+        cappedData =
+            [ p0 ] ++ data ++ [ p1 ]
+    in
+        line cappedData attr domain range
 
 
 dot : Method a
