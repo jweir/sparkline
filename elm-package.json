@@ -1,13 +1,14 @@
 {
-    "version": "1.0.2",
+    "version": "2.0.0",
     "summary": "Generate inline graphs - sparklines",
     "repository": "https://github.com/jweir/sparkline.git",
     "license": "BSD3",
     "source-directories": [
-        "."
+        "src"
     ],
     "exposed-modules": [
-        "Sparkline"
+        "Sparkline",
+        "Sparkline.Extras"
     ],
     "dependencies": {
         "elm-lang/core": "5.1.1 <= v < 6.0.0",
