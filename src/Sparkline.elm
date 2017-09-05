@@ -10,6 +10,7 @@ module Sparkline exposing (Size, DataSet, Point, Param(..), sparkline)
 
 -}
 
+import Array
 import Svg as Svg
     exposing
         ( Svg
@@ -91,6 +92,8 @@ type Param a
     = Bar Float DataSet
     | Dot DataSet
     | Line DataSet
+      -- Area DataSet
+    | Label (LabelSet a)
       -- options
     | ZeroLine
     | Independent (Param a)
@@ -103,6 +106,10 @@ type alias Size =
     ( Float, Float, Float, Float )
 
 
+type alias Text =
+    String
+
+
 {-| Tuple of (x,y) value
 -}
 type alias Point =
@@ -113,6 +120,12 @@ type alias Point =
 -}
 type alias DataSet =
     List Point
+
+
+{-| The data and text to use for labeling
+-}
+type alias LabelSet a =
+    List ( Point, List (Svg.Attribute a), Text )
 
 
 type alias Range =
@@ -197,6 +210,14 @@ tokenizer msg =
 
         Line data ->
             ( line, data, [], False )
+
+        Label labelSet ->
+            let
+                -- map out just the points to use as the underlying data
+                data =
+                    List.map (\( p, _, _ ) -> p) labelSet
+            in
+                ( label labelSet, data, [], False )
 
         ZeroLine ->
             ( zeroLine, [], [], False )
@@ -301,6 +322,41 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
                         )
                         []
             )
+
+
+label : LabelSet a -> Method a
+label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) range =
+    let
+        indexed =
+            labels |> Array.fromList
+    in
+        data
+            |> scale range
+            |> Array.fromList
+            |> Array.toIndexedList
+            |> List.concatMap
+                (\( index, ( x, y ) ) ->
+                    case Array.get index indexed of
+                        Nothing ->
+                            []
+
+                        Just ( p, attr, label ) ->
+                            [ Svg.text_ ([ A.x := x, A.y := y ] ++ styled ++ attr) [ Svg.text label ] ]
+                )
+
+
+
+{- }
+   data
+       |> scale range
+       |> List.map
+           (\( x, y ) ->
+               Svg.text_
+                   (attr ++ [ A.fontSize "12px", A.x := x, A.y := 0 ])
+                   [ Svg.text "hell"
+                   ]
+           )
+-}
 
 
 collect : Point -> String -> String
