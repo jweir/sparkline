@@ -91,6 +91,8 @@ type Param a
     = Bar Float DataSet
     | Dot DataSet
     | Line DataSet
+      -- Area DataSet
+    | Label (List ( List (Svg.Attribute a), Text )) DataSet
       -- options
     | ZeroLine
     | Independent (Param a)
@@ -101,6 +103,10 @@ type Param a
 -}
 type alias Size =
     ( Float, Float, Float, Float )
+
+
+type alias Text =
+    String
 
 
 {-| Tuple of (x,y) value
@@ -197,6 +203,9 @@ tokenizer msg =
 
         Line data ->
             ( line, data, [], False )
+
+        Label labelset data ->
+            ( label labelset, data, [], False )
 
         ZeroLine ->
             ( zeroLine, [], [], False )
@@ -300,6 +309,19 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
                             ++ attr
                         )
                         []
+            )
+
+
+label : List ( List (Svg.Attribute a), Text ) -> Method a
+label labels data attr domain range =
+    data
+        |> scale range
+        |> List.map
+            (\( x, y ) ->
+                Svg.text_
+                    (attr ++ [ A.fontSize "12px", A.x := x, A.y := 0 ])
+                    [ Svg.text "hell"
+                    ]
             )
 
 
