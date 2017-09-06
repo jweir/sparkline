@@ -1,3 +1,6 @@
+# 2.0.1
+Fix Bar width calculation
+
 # 2.0.0
 Added Area to draw filled shapes
 Added at Label message to print text on the graph.

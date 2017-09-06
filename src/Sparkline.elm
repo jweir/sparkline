@@ -327,7 +327,7 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
                     -- this positions the bar correctly within the frame based on the width of the bar
                     -- same should happen for dots
                     p =
-                        w * (x / (x1 - x0))
+                        w * ((x - x0) / (x1 - x0))
 
                     ( y_, h ) =
                         if y < 0 then
