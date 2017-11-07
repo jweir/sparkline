@@ -1,11 +1,15 @@
-module Sparkline exposing (Size, DataSet, Point, Param(..), sparkline)
+module Sparkline exposing (DataSet, Param(..), Point, Size, sparkline)
 
 {-| This library is for generating inline graphs, called sparklines.
 
+
 # Definition
+
 @docs sparkline, Param
 
+
 # Data types
+
 @docs Point, DataSet, Size
 
 -}
@@ -19,17 +23,17 @@ import Svg as Svg
         )
 import Svg.Attributes as A
     exposing
-        ( fill
+        ( cx
+        , cy
+        , d
+        , fill
+        , height
+        , r
         , stroke
         , strokeWidth
-        , d
-        , cx
-        , cy
-        , r
+        , width
         , x
         , y
-        , width
-        , height
         )
 
 
@@ -54,19 +58,21 @@ given. So last graph will be drawn on top.
               ]
 
 The three types of graphs are
-* **Line** creates a line graph
-* **Area** creates a graph meant to be filled
-* **Dot** draws a dot at each point.  Set the radius of the dot by styline it `|> Style [Svg.r "3"]`
-* **Bar** <BarWidth> Draws a bar graph.  This requires defining what the width of the bar.
-* **Label** plots text on the graph
+
+  - **Line** creates a line graph
+  - **Area** creates a graph meant to be filled
+  - **Dot** draws a dot at each point. Set the radius of the dot by styling it `|> Style [Svg.r "3"]`
+  - **Bar** <BarWidth> Draws a bar graph. This requires defining what the width of the bar.
+  - **Label** plots text on the graph
 
 There are also some options which can be applied to each graph:
-* **Independent** will scale this graph's dataset separately from the rest of the graphs.
-* **Style** allows apply `Svg.Attribute` styles to the rendered svg.
+
+  - **Independent** will scale this graph's dataset separately from the rest of the graphs.
+  - **Style** allows applying `Svg.Attribute` styles to the rendered svg.
 
 Finally there is the **ZeroLine** param which will draw a line at the 0 y axis
-for the data. *This does not apply to any graphs rendered with
-**Independent.***
+for the data. _This does not apply to any graphs rendered with
+**Independent.**_
 
 **Examples*
 
@@ -85,9 +91,6 @@ See Example.elm for more examples.
             [ Line data |> Independent
             , Line data2 |> Independent
             ]
-
-
-
 
 -}
 type Param a
@@ -159,7 +162,7 @@ sparkline size params =
     let
         tokens : List ( Method a, DataSet, List (Svg.Attribute a), IndySet )
         tokens =
-            List.map (tokenizer) params
+            List.map tokenizer params
 
         domain_ : Domain
         domain_ =
@@ -179,20 +182,20 @@ sparkline size params =
                 ( cdom, crange ) =
                     if indy == True then
                         ( domain [ data ]
-                        , (range size (domain [ data ]))
+                        , range size (domain [ data ])
                         )
                     else
                         ( domain_, range_ )
             in
-                method
-                    data
-                    attr
-                    cdom
-                    crange
+            method
+                data
+                attr
+                cdom
+                crange
     in
-        tokens
-            |> List.concatMap collector
-            |> frame size
+    tokens
+        |> List.concatMap collector
+        |> frame size
 
 
 type alias IndySet =
@@ -222,7 +225,7 @@ tokenizer msg =
                 data =
                     List.map (\( p, _, _ ) -> p) labelSet
             in
-                ( label labelSet, data, [], False )
+            ( label labelSet, data, [], False )
 
         ZeroLine ->
             ( zeroLine, [], [], False )
@@ -232,14 +235,14 @@ tokenizer msg =
                 ( m, d, a, _ ) =
                     tokenizer msg_
             in
-                ( m, d, a, True )
+            ( m, d, a, True )
 
         Style attr msg_ ->
             let
                 ( m, d, _, i ) =
                     tokenizer msg_
             in
-                ( m, d, attr, i )
+            ( m, d, attr, i )
 
 
 frame : Size -> List (Svg a) -> Svg a
@@ -262,11 +265,11 @@ zeroLine _ attr domain range =
         ( ( x1, y1 ), ( x2, y2 ) ) =
             domain
     in
-        line
-            [ ( x1, 0 ), ( x2, 0 ) ]
-            attr
-            domain
-            range
+    line
+        [ ( x1, 0 ), ( x2, 0 ) ]
+        attr
+        domain
+        range
 
 
 line : Method a
@@ -298,7 +301,7 @@ area data attr domain range =
         cappedData =
             [ p0 ] ++ data ++ [ p1 ]
     in
-        line cappedData attr domain range
+    line cappedData attr domain range
 
 
 dot : Method a
@@ -335,15 +338,15 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
                         else
                             ( my y, my 0 - my y )
                 in
-                    rect
-                        ([ A.x := ((mx x) - p)
-                         , A.y := y_
-                         , width := w
-                         , height := h
-                         ]
-                            ++ attr
-                        )
-                        []
+                rect
+                    ([ A.x := (mx x - p)
+                     , A.y := y_
+                     , width := w
+                     , height := h
+                     ]
+                        ++ attr
+                    )
+                    []
             )
 
 
@@ -353,19 +356,19 @@ label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) range =
         indexed =
             labels |> Array.fromList
     in
-        data
-            |> scale range
-            |> Array.fromList
-            |> Array.toIndexedList
-            |> List.concatMap
-                (\( index, ( x, y ) ) ->
-                    case Array.get index indexed of
-                        Nothing ->
-                            []
+    data
+        |> scale range
+        |> Array.fromList
+        |> Array.toIndexedList
+        |> List.concatMap
+            (\( index, ( x, y ) ) ->
+                case Array.get index indexed of
+                    Nothing ->
+                        []
 
-                        Just ( p, attr, label ) ->
-                            [ Svg.text_ ([ A.x := x, A.y := y ] ++ styled ++ attr) [ Svg.text label ] ]
-                )
+                    Just ( p, attr, label ) ->
+                        [ Svg.text_ ([ A.x := x, A.y := y ] ++ styled ++ attr) [ Svg.text label ] ]
+            )
 
 
 
@@ -391,18 +394,18 @@ collect ( x, y ) path =
             else
                 "L"
     in
-        path
-            ++ command
-            ++ (toString x)
-            ++ " "
-            ++ (toString y)
+    path
+        ++ command
+        ++ toString x
+        ++ " "
+        ++ toString y
 
 
 path : Range -> DataSet -> String
 path range data =
     data
         |> scale range
-        |> List.foldr (collect) ""
+        |> List.foldr collect ""
 
 
 
@@ -412,22 +415,23 @@ path range data =
 domain : List DataSet -> Domain
 domain dataset =
     let
+        flatData =
+            dataset |> List.concatMap (\s -> s)
+
         seed =
-            dataset
-                |> List.concatMap (\s -> s)
+            flatData
                 |> List.head
                 |> Maybe.withDefault ( 0, 0 )
     in
-        dataset
-            |> List.concatMap (\s -> s)
-            |> List.foldr
-                (\( x, y ) ( ( xlo, ylo ), ( xhi, yhi ) ) ->
-                    ( ( Basics.min xlo x, Basics.min ylo y )
-                    , ( Basics.max xhi x, Basics.max yhi y )
-                    )
+    flatData
+        |> List.foldr
+            (\( x, y ) ( ( xlo, ylo ), ( xhi, yhi ) ) ->
+                ( ( Basics.min xlo x, Basics.min ylo y )
+                , ( Basics.max xhi x, Basics.max yhi y )
                 )
-                ( seed, seed )
-            |> ensure
+            )
+            ( seed, seed )
+        |> ensure
 
 
 {-| esures the domain along y is not identical
@@ -450,13 +454,9 @@ range ( w, h, _, _ ) ( ( x0, y0 ), ( x1, y1 ) ) =
 
 
 scale : Range -> DataSet -> DataSet
-scale range data =
-    let
-        ( mx, my ) =
-            range
-    in
-        data
-            |> List.map (\( x, y ) -> ( mx x, my y ))
+scale ( mx, my ) data =
+    data
+        |> List.map (\( x, y ) -> ( mx x, my y ))
 
 
 (:=) : (String -> a) -> Float -> a
