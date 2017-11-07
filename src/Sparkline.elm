@@ -447,10 +447,22 @@ ensure ( ( x0, y0 ), ( x1, y1 ) ) =
 range : Size -> Domain -> Range
 range ( w, h, _, _ ) ( ( x0, y0 ), ( x1, y1 ) ) =
     ( \x ->
-        (x - x0) * (w / (x1 - x0))
+        (x - x0) * (w / (x1 - x0)) |> noNan
     , \y ->
-        (y1 - y) * (h / (y1 - y0))
+        (y1 - y) * (h / (y1 - y0)) |> noNan
     )
+
+
+{-| remove NaN's with a 0
+-}
+noNan : Float -> Float
+noNan f =
+    case isNaN f of
+        True ->
+            0
+
+        False ->
+            f
 
 
 scale : Range -> DataSet -> DataSet

@@ -1,10 +1,10 @@
 module Example exposing (..)
 
-import Svg.Attributes as Svg
-import Sparkline exposing (Point, sparkline, Param(..))
-import Sparkline.Extras exposing (extent, Axes(..))
 import Html as Html
 import Html.Attributes as HA
+import Sparkline exposing (Param(..), Point, sparkline)
+import Sparkline.Extras exposing (Axes(..), extent)
+import Svg.Attributes as Svg
 
 
 main =
@@ -21,6 +21,10 @@ main =
                     (List.map (\( x, y ) -> ( ( x, y ), [], toString y )) (data |> extent Y))
                     |> Style [ Svg.fill "black", Svg.fontFamily "arial", Svg.fontSize "10px", Svg.dx "2", Svg.dy "2" ]
                 ]
+            ]
+        , Html.div
+            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
+            [ sparkline ( 100, 15, 5, 15 ) [ Line [ ( 0, 1 ) ] ]
             ]
         , Html.div
             [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
