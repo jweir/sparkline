@@ -4,7 +4,18 @@ import Html as Html
 import Html.Attributes as HA
 import Sparkline exposing (Param(..), Point, sparkline)
 import Sparkline.Extras exposing (Axes(..), extent)
+import Svg as Svg
 import Svg.Attributes as Svg
+
+
+card : Svg.Svg a -> Html.Html a
+card f =
+    Html.div [ HA.style [ ( "display", "inline-block" ), ( "background", "#EEE" ), ( "margin", "1px" ), ( "width", "40px" ) ] ]
+        [ f ]
+
+
+dom =
+    [ ( 0, 0 ), ( 4, 4 ) ]
 
 
 main =
@@ -12,6 +23,14 @@ main =
         [ Html.div
             [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
             [ sparkline ( 100, 15, 5, 15 ) [ Bar 2 datax ]
+            ]
+        , Html.div []
+            [ Html.text "Domain example. Three graphs, using the same domain data."
+            , Html.div []
+                [ card (sparkline ( 40, 40, 0, 0 ) [ Dot [ ( 1, 1 ) ], Domain dom ])
+                , card (sparkline ( 40, 40, 0, 0 ) [ Dot [ ( 2, 2 ) ], Domain dom ])
+                , card (sparkline ( 40, 40, 0, 0 ) [ Dot [ ( 3, 3 ) ], Domain dom ])
+                ]
             ]
         , Html.div []
             [ sparkline

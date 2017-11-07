@@ -67,6 +67,8 @@ The three types of graphs are
 
 There are also some options which can be applied to each graph:
 
+  - **Domain** includes the given data into the graph's domain.
+    This is useful when creating multiple graphs that need to have the same scale.
   - **Independent** will scale this graph's dataset separately from the rest of the graphs.
   - **Style** allows applying `Svg.Attribute` styles to the rendered svg.
 
@@ -98,6 +100,7 @@ type Param a
     | Dot DataSet
     | Line DataSet
     | Area DataSet
+    | Domain DataSet
     | Label (LabelSet a)
       -- options
     | ZeroLine
@@ -219,6 +222,9 @@ tokenizer msg =
         Area data ->
             ( area, data, [], False )
 
+        Domain data ->
+            ( noop, data, [], False )
+
         Label labelSet ->
             let
                 -- map out just the points to use as the underlying data
@@ -270,6 +276,11 @@ zeroLine _ attr domain range =
         attr
         domain
         range
+
+
+noop : Method a
+noop data attr domain range =
+    []
 
 
 line : Method a
