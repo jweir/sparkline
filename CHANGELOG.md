@@ -1,3 +1,8 @@
+# Unreleased
+
+Fixes:
+Expose the LabelSet type
+
 # 2.0.1
 Fix Bar width calculation
 

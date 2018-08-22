@@ -25,6 +25,12 @@ main =
             [ sparkline ( 100, 15, 5, 15 ) [ Bar 2 datax ]
             ]
         , Html.div []
+            [ Html.h3 [] [ Html.text "filled" ]
+            , sparkline ( 200, 10, 5, 5 )
+                [ Line [ ( 0, 10 ), ( 20, 14 ), ( 20, 4 ), ( 18, -4 ), ( 10, -10 ), ( 0, 10 ) ] |> Style [ Svg.fill "#CCC", Svg.stroke "none" ]
+                ]
+            ]
+        , Html.div []
             [ Html.text "Domain example. Three graphs, using the same domain data."
             , Html.div []
                 [ card (sparkline ( 40, 40, 0, 0 ) [ Dot [ ( 1, 1 ) ], Domain dom ])

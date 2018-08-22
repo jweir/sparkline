@@ -1,4 +1,4 @@
-module Sparkline exposing (DataSet, Param(..), Point, Size, sparkline)
+module Sparkline exposing (DataSet, LabelSet, Param(..), Point, Size, sparkline)
 
 {-| This library is for generating inline graphs, called sparklines.
 
@@ -10,7 +10,7 @@ module Sparkline exposing (DataSet, Param(..), Point, Size, sparkline)
 
 # Data types
 
-@docs Point, DataSet, Size
+@docs Point, DataSet, LabelSet, Size
 
 -}
 
