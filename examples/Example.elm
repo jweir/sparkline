@@ -1,56 +1,84 @@
-module Example exposing (..)
+module Example exposing (card, data, data2, data3, datax, dom, main)
 
 import Html as Html
 import Html.Attributes as HA
-import Sparkline exposing (Param(..), Point, sparkline)
+import Sparkline exposing (Param(..), Point, Size, sparkline)
 import Sparkline.Extras exposing (Axes(..), extent)
+import Svg as Svg
 import Svg.Attributes as Svg
+
+
+card : Svg.Svg a -> Html.Html a
+card f =
+    Html.div [ HA.style "display" "inline-block", HA.style "background" "#EEE", HA.style "margin" "1px", HA.style "width" "40px" ]
+        [ f ]
+
+
+dom =
+    [ ( 0, 0 ), ( 4, 4 ) ]
 
 
 main =
     Html.div []
         [ Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
-            [ sparkline ( 100, 15, 5, 15 ) [ Bar 2 datax ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 15 5 15) [ Bar 2 datax ]
+            ]
+        , Html.div []
+            [ Html.h3 []
+                [ Html.text "filled" ]
+            , sparkline
+                (Size 200 10 5 5)
+                [ Line [ ( 0, 10 ), ( 20, 14 ), ( 20, 4 ), ( 18, -4 ), ( 10, -10 ), ( 0, 10 ) ] |> Style [ Svg.fill "#CCC", Svg.stroke "none" ]
+                ]
+            ]
+        , Html.div []
+            [ Html.text "Domain example. Three graphs, using the same domain data."
+            , Html.div []
+                [ card (sparkline (Size 40 40 0 0) [ Dot [ ( 1, 1 ) ], Domain dom ])
+                , card (sparkline (Size 40 40 0 0) [ Dot [ ( 2, 2 ) ], Domain dom ])
+                , card (sparkline (Size 40 40 0 0) [ Dot [ ( 3, 3 ) ], Domain dom ])
+                ]
             ]
         , Html.div []
             [ sparkline
-                ( 200, 20, 25, 5 )
+                (Size 200 20 25 5)
                 [ Dot data
                 , Label
-                    (List.map (\( x, y ) -> ( ( x, y ), [], toString y )) (data |> extent Y))
+                    (List.map (\( x, y ) -> ( ( x, y ), [], String.fromFloat y )) (data |> extent Y))
                     |> Style [ Svg.fill "black", Svg.fontFamily "arial", Svg.fontSize "10px", Svg.dx "2", Svg.dy "2" ]
                 ]
             ]
         , Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
-            [ sparkline ( 100, 15, 5, 15 ) [ Line [ ( 0, 1 ) ] ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 15 5 15) [ Line [ ( 0, 1 ) ] ]
             ]
         , Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "110px" ) ] ]
-            [ sparkline ( 100, 15, 5, 15 ) [ Bar 2 data2 ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 15 5 15) [ Bar 2 data2 ]
             ]
         , Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "auto" ) ] ]
-            [ sparkline ( 100, 15, 5, 15 ) [ Bar 2 data3 ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 15 5 15) [ Bar 2 data3 ]
             ]
         , Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "auto" ) ] ]
-            [ sparkline ( 100, 15, 5, 15 ) [ Line data3 ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 15 5 15) [ Line data3 ]
             ]
         , Html.div
-            [ HA.style [ ( "margin", "2px" ), ( "background", "#EEE" ), ( "width", "auto" ) ] ]
-            [ sparkline ( 100, 5, 5, 15 ) [ Dot data3 ] ]
+            [ HA.style "margin" "2px", HA.style "background" "#EEE", HA.style "width" "110px" ]
+            [ sparkline (Size 100 5 5 15) [ Dot data3 ] ]
         , Html.div []
-            [ Html.h3 [] [ Html.text "filled" ]
-            , sparkline ( 200, 10, 5, 5 )
+            [ Html.h3 []
+                [ Html.text "filled" ]
+            , sparkline (Size 200 10 5 5)
                 [ Area data |> Style [ Svg.fill "#CCC", Svg.stroke "none" ]
                 , Dot datax |> Style [ Svg.fill "#F00" ]
                 ]
             ]
         , Html.div []
             [ sparkline
-                ( 200, 10, 5, 5 )
+                (Size 200 10 5 5)
                 [ Independent (Bar 2 data3)
                 , Independent (Style [ Svg.fill "#F00" ] (Dot datax))
                 , Independent (Line data)
@@ -58,21 +86,21 @@ main =
             ]
         , Html.div []
             [ sparkline
-                ( 200, 10, 5, 5 )
+                (Size 200 10 5 5)
                 [ Line [ ( 0, 10 ), ( 10, 10 ), ( 20, 30 ) ]
                 , Line [ ( 0, 2 ), ( 10, 4 ), ( 20, 20 ), ( 30, 40 ) ]
                 ]
             ]
         , Html.div []
             [ sparkline
-                ( 200, 10, 5, 5 )
+                (Size 200 10 5 5)
                 [ Independent (Line [ ( 0, 10 ), ( 10, 10 ), ( 20, 30 ) ])
                 , Independent (Line [ ( 0, 2 ), ( 10, 4 ), ( 20, 20 ), ( 30, 40 ) ])
                 ]
             ]
         , Html.div []
             [ sparkline
-                ( 200, 10, 5, 5 )
+                (Size 200 10 5 5)
                 [ Style [ Svg.stroke "#F00" ] ZeroLine
                 , Line data
                 , Style [ Svg.r "1" ] (Dot [ ( 8, -40 ), ( 8, 0 ), ( 8, 40 ) ])
@@ -80,7 +108,7 @@ main =
             ]
         , Html.div []
             [ sparkline
-                ( 200, 20, 5, 5 )
+                (Size 200 20 5 5)
                 [ ZeroLine |> Style [ Svg.stroke "#CCC" ]
                 , Dot [ ( 0, 0 ), ( 4, 10 ) ]
                 , Bar 2 [ ( 8, 10 ), ( 10, 4 ), ( 12, -5 ) ]
@@ -89,7 +117,7 @@ main =
             ]
         , Html.div []
             [ sparkline
-                ( 200, 5, 5, 5 )
+                (Size 200 5 5 5)
                 [ Bar 20
                     [ ( 0, 2 )
                     , ( 10, 30 )
