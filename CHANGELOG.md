@@ -1,4 +1,9 @@
-# Unreleased
+# 4.0.0
+
+Upgraded for Elm 0.19
+
+Breaks:
+Changed the Size type from a tuple to a record
 
 Fixes:
 Expose the LabelSet type

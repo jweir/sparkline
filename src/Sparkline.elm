@@ -1,4 +1,7 @@
-module Sparkline exposing (DataSet, LabelSet, Param(..), Point, Size, sparkline)
+module Sparkline exposing
+    ( sparkline, Param(..)
+    , Point, DataSet, LabelSet, Size
+    )
 
 {-| This library is for generating inline graphs, called sparklines.
 
@@ -76,7 +79,7 @@ Finally there is the **ZeroLine** param which will draw a line at the 0 y axis
 for the data. _This does not apply to any graphs rendered with
 **Independent.**_
 
-**Examples*
+\*\*Examples\*
 
 See Example.elm for more examples.
 
@@ -111,7 +114,11 @@ type Param a
 {-| Defines the size of the graph (width, height, leftRightMargin, topBottomMargin)
 -}
 type alias Size =
-    ( Float, Float, Float, Float )
+    { width : Float
+    , height : Float
+    , marginLR : Float
+    , marginTB : Float
+    }
 
 
 type alias Text =
@@ -163,15 +170,15 @@ type alias Method a =
 sparkline : Size -> List (Param a) -> Svg a
 sparkline size params =
     let
-        tokens : List ( Method a, DataSet, List (Svg.Attribute a), IndySet )
+        tokens : List (TokenSet a)
         tokens =
             List.map tokenizer params
 
         domain_ : Domain
         domain_ =
             tokens
-                |> List.filter (\( _, _, _, indy ) -> indy /= True)
-                |> List.concatMap (\( _, data, _, _ ) -> [ data ])
+                |> List.filter (\token -> token.indy /= True)
+                |> List.concatMap (\token -> [ token.data ])
                 |> domain
 
         -- calc the range in the method, bar needs the size before calcing the range
@@ -179,22 +186,19 @@ sparkline size params =
         range_ =
             range size domain_
 
-        collector : ( Method a, DataSet, List (Svg.Attribute a), IndySet ) -> List (Svg a)
-        collector ( method, data, attr, indy ) =
+        collector : TokenSet a -> List (Svg a)
+        collector token =
             let
                 ( cdom, crange ) =
-                    if indy == True then
-                        ( domain [ data ]
-                        , range size (domain [ data ])
+                    if token.indy == True then
+                        ( domain [ token.data ]
+                        , range size (domain [ token.data ])
                         )
+
                     else
                         ( domain_, range_ )
             in
-            method
-                data
-                attr
-                cdom
-                crange
+            token.method token.data token.attributes cdom crange
     in
     tokens
         |> List.concatMap collector
@@ -205,25 +209,31 @@ type alias IndySet =
     Bool
 
 
-tokenizer :
-    Param a
-    -> ( Method a, DataSet, List (Svg.Attribute a), IndySet )
+type alias TokenSet a =
+    { method : Method a
+    , data : DataSet
+    , attributes : List (Svg.Attribute a)
+    , indy : IndySet
+    }
+
+
+tokenizer : Param a -> TokenSet a
 tokenizer msg =
     case msg of
         Bar width data ->
-            ( bar width, data, [], False )
+            TokenSet (bar width) data [] False
 
         Dot data ->
-            ( dot, data, [], False )
+            TokenSet dot data [] False
 
         Line data ->
-            ( line, data, [], False )
+            TokenSet line data [] False
 
         Area data ->
-            ( area, data, [], False )
+            TokenSet area data [] False
 
         Domain data ->
-            ( noop, data, [], False )
+            TokenSet noop data [] False
 
         Label labelSet ->
             let
@@ -231,65 +241,65 @@ tokenizer msg =
                 data =
                     List.map (\( p, _, _ ) -> p) labelSet
             in
-            ( label labelSet, data, [], False )
+            TokenSet (label labelSet) data [] False
 
         ZeroLine ->
-            ( zeroLine, [], [], False )
+            TokenSet zeroLine [] [] False
 
         Independent msg_ ->
             let
-                ( m, d, a, _ ) =
+                token =
                     tokenizer msg_
             in
-            ( m, d, a, True )
+            { token | indy = True }
 
         Style attr msg_ ->
             let
-                ( m, d, _, i ) =
+                token =
                     tokenizer msg_
             in
-            ( m, d, attr, i )
+            { token | attributes = attr }
 
 
 frame : Size -> List (Svg a) -> Svg a
-frame ( w, h, ms, mt ) items =
+frame size items =
     Svg.svg
-        [ A.width := (w + 2 * ms)
-        , A.height := (h + 2 * mt)
-        , A.viewBox *= [ 0, 0, w + 2 * ms, h + 2 * mt ]
+        [ setAttr A.width (size.width + 2 * size.marginLR)
+        , setAttr A.height (size.height + 2 * size.marginTB)
+        , joinAttr A.viewBox [ 0, 0, size.width + 2 * size.marginLR, size.height + 2 * size.marginTB ]
         ]
         [ Svg.g
-            [ A.transform ("translate" ++ toString ( ms, mt ))
+            [ A.transform ("translate(" ++ String.fromFloat size.marginLR ++ "," ++ String.fromFloat size.marginTB ++ ")")
             ]
             items
         ]
 
 
 zeroLine : Method a
-zeroLine _ attr domain range =
+zeroLine _ attr domainFunc rangeFunc =
     let
         ( ( x1, y1 ), ( x2, y2 ) ) =
-            domain
+            domainFunc
     in
     line
         [ ( x1, 0 ), ( x2, 0 ) ]
         attr
-        domain
-        range
+        domainFunc
+        rangeFunc
 
 
 noop : Method a
-noop data attr domain range =
+noop data attr _ _ =
     []
 
 
 line : Method a
-line data attr domain range =
+line data attr _ rangeFunc =
     [ Svg.path
         ([ fill "none"
          , stroke "#000"
-         , strokeWidth := 1
-         , d (path range data)
+         , setAttr strokeWidth 1
+         , d (path rangeFunc data)
          ]
             ++ attr
         )
@@ -298,10 +308,10 @@ line data attr domain range =
 
 
 area : Method a
-area data attr domain range =
+area data attr domainFunc rangeFunc =
     let
         ( ( minx, miny ), ( maxx, maxy ) ) =
-            domain
+            domainFunc
 
         p0 =
             ( minx, miny )
@@ -312,19 +322,19 @@ area data attr domain range =
         cappedData =
             [ p0 ] ++ data ++ [ p1 ]
     in
-    line cappedData attr domain range
+    line cappedData attr domainFunc rangeFunc
 
 
 dot : Method a
-dot data attr _ range =
+dot data attr _ rangeFunc =
     data
-        |> scale range
+        |> scale rangeFunc
         |> List.map
             (\( x, y ) ->
                 circle
-                    ([ cx := x
-                     , cy := y
-                     , r := 2
+                    ([ setAttr cx x
+                     , setAttr cy y
+                     , setAttr r 2
                      ]
                         ++ attr
                     )
@@ -346,14 +356,15 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
                     ( y_, h ) =
                         if y < 0 then
                             ( my y - (my y - my 0), my y - my 0 )
+
                         else
                             ( my y, my 0 - my y )
                 in
                 rect
-                    ([ A.x := (mx x - p)
-                     , A.y := y_
-                     , width := w
-                     , height := h
+                    ([ setAttr A.x (mx x - p)
+                     , setAttr A.y y_
+                     , setAttr width w
+                     , setAttr height h
                      ]
                         ++ attr
                     )
@@ -362,13 +373,13 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
 
 
 label : LabelSet a -> Method a
-label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) range =
+label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) rangeFunc =
     let
         indexed =
             labels |> Array.fromList
     in
     data
-        |> scale range
+        |> scale rangeFunc
         |> Array.fromList
         |> Array.toIndexedList
         |> List.concatMap
@@ -377,45 +388,40 @@ label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) range =
                     Nothing ->
                         []
 
-                    Just ( p, attr, label ) ->
-                        [ Svg.text_ ([ A.x := x, A.y := y ] ++ styled ++ attr) [ Svg.text label ] ]
+                    Just ( p, attr, label_ ) ->
+                        [ Svg.text_
+                            ([ setAttr A.x x
+                             , setAttr A.y y
+                             ]
+                                ++ styled
+                                ++ attr
+                            )
+                            [ Svg.text label_ ]
+                        ]
             )
 
 
-
-{- }
-   data
-       |> scale range
-       |> List.map
-           (\( x, y ) ->
-               Svg.text_
-                   (attr ++ [ A.fontSize "12px", A.x := x, A.y := 0 ])
-                   [ Svg.text "hell"
-                   ]
-           )
--}
-
-
 collect : Point -> String -> String
-collect ( x, y ) path =
+collect ( x, y ) pathStr =
     let
         command =
-            if path == "" then
+            if pathStr == "" then
                 "M"
+
             else
                 "L"
     in
-    path
+    pathStr
         ++ command
-        ++ toString x
+        ++ String.fromFloat x
         ++ " "
-        ++ toString y
+        ++ String.fromFloat y
 
 
 path : Range -> DataSet -> String
-path range data =
+path r data =
     data
-        |> scale range
+        |> scale r
         |> List.foldr collect ""
 
 
@@ -451,16 +457,17 @@ ensure : Domain -> Domain
 ensure ( ( x0, y0 ), ( x1, y1 ) ) =
     if y0 == y1 then
         ( ( x0, min 0 y0 ), ( x1, y1 ) )
+
     else
         ( ( x0, y0 ), ( x1, y1 ) )
 
 
 range : Size -> Domain -> Range
-range ( w, h, _, _ ) ( ( x0, y0 ), ( x1, y1 ) ) =
+range size ( ( x0, y0 ), ( x1, y1 ) ) =
     ( \x ->
-        (x - x0) * (w / (x1 - x0)) |> noNan
+        (x - x0) * (size.width / (x1 - x0)) |> noNan
     , \y ->
-        (y1 - y) * (h / (y1 - y0)) |> noNan
+        (y1 - y) * (size.height / (y1 - y0)) |> noNan
     )
 
 
@@ -482,13 +489,13 @@ scale ( mx, my ) data =
         |> List.map (\( x, y ) -> ( mx x, my y ))
 
 
-(:=) : (String -> a) -> Float -> a
-(:=) fun n =
-    fun (toString n)
+setAttr : (String -> a) -> Float -> a
+setAttr fun n =
+    fun (String.fromFloat n)
 
 
-(*=) : (String -> a) -> List Float -> a
-(*=) fun n =
-    List.map toString n
+joinAttr : (String -> a) -> List Float -> a
+joinAttr fun n =
+    List.map String.fromFloat n
         |> String.join " "
         |> fun
