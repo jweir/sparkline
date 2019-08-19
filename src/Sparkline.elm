@@ -1,6 +1,8 @@
 module Sparkline exposing
     ( sparkline, Param(..)
     , Point, DataSet, LabelSet, Size
+    , Event(..), Selection, subscriptions
+    , createSelection
     )
 
 {-| This library is for generating inline graphs, called sparklines.
@@ -15,9 +17,16 @@ module Sparkline exposing
 
 @docs Point, DataSet, LabelSet, Size
 
+
+# Event types
+
+@docs Event, Selection, subscriptions
+
 -}
 
 import Array
+import Browser.Events as Browser
+import Json.Decode as Json
 import Svg as Svg
     exposing
         ( Svg
@@ -38,6 +47,7 @@ import Svg.Attributes as A
         , x
         , y
         )
+import Svg.Events as E
 
 
 {-| Drawing a sparkline occurs by passing params
@@ -167,8 +177,8 @@ type alias Method a =
 
 {-| The entry point to create a graph. See Param.
 -}
-sparkline : Size -> List (Param a) -> Svg a
-sparkline size params =
+sparkline : Size -> List (Event a) -> List (Param a) -> Svg a
+sparkline size events params =
     let
         tokens : List (TokenSet a)
         tokens =
@@ -186,6 +196,9 @@ sparkline size params =
         range_ =
             range size domain_
 
+        inverter =
+            invert size domain_
+
         collector : TokenSet a -> List (Svg a)
         collector token =
             let
@@ -199,9 +212,19 @@ sparkline size params =
                         ( domain_, range_ )
             in
             token.method token.data token.attributes cdom crange
+
+        events_ =
+            events
+                |> List.concatMap
+                    (\event ->
+                        case event of
+                            Select sel msg ->
+                                selection size sel msg inverter [] [] domain_ range_
+                    )
     in
     tokens
         |> List.concatMap collector
+        |> List.append events_
         |> frame size
 
 
@@ -462,12 +485,25 @@ ensure ( ( x0, y0 ), ( x1, y1 ) ) =
         ( ( x0, y0 ), ( x1, y1 ) )
 
 
+{-| creates x and y scale functions
+-}
 range : Size -> Domain -> Range
 range size ( ( x0, y0 ), ( x1, y1 ) ) =
     ( \x ->
         (x - x0) * (size.width / (x1 - x0)) |> noNan
     , \y ->
         (y1 - y) * (size.height / (y1 - y0)) |> noNan
+    )
+
+
+{-| creates x and y scale inversion functions
+-}
+invert : Size -> Domain -> Range
+invert size ( ( x0, y0 ), ( x1, y1 ) ) =
+    ( \x ->
+        ((x1 - x0) / size.width) * (x - size.marginLR) |> noNan
+    , \y ->
+        (size.height * ((y1 - y0) / (y - size.marginTB))) |> noNan
     )
 
 
@@ -499,3 +535,167 @@ joinAttr fun n =
     List.map String.fromFloat n
         |> String.join " "
         |> fun
+
+
+
+-- EVENTS
+
+
+{-| TODO: document
+-}
+type Event a
+    = Select Selection (Selection -> a)
+
+
+{-| TODO: document and make this private
+-}
+type Selection
+    = Selection Selected
+
+
+type alias Selected =
+    { mouseDown : Bool
+
+    -- the starting point on the page
+    , offset : Maybe Point
+    , box0 : Maybe Point
+
+    -- the bounding box in absolute size to the SVG graph
+    , box1 : Maybe Point
+
+    -- the bounding box for the data x and y
+    , dataBounds : Maybe ( Point, Point )
+    }
+
+
+createSelection : Selection
+createSelection =
+    Selection (Selected False Nothing Nothing Nothing Nothing)
+
+
+{-| The entry point to create a graph. See Param.
+-}
+subscriptions : Event msg -> Sub msg
+subscriptions event =
+    let
+        map m =
+            Json.map2 m
+                (Json.field "pageX" Json.int)
+                (Json.field "pageY" Json.int)
+
+        -- DRY up
+        -- FIXME remove the - 5 and get the margin from the `size`
+        offsetPosition sel msg =
+            case sel.offset of
+                Nothing ->
+                    Json.succeed (sel |> Selection |> msg)
+
+                Just ( x0, y0 ) ->
+                    map
+                        (\x y ->
+                            { sel | box1 = Just ( (x |> toFloat) - x0, (y |> toFloat) - y0 ) }
+                                |> Selection
+                                |> msg
+                        )
+    in
+    Sub.batch
+        (case event of
+            Select (Selection sel) msg ->
+                if sel.mouseDown == True then
+                    -- order matters LIFO seems to be the rule, the mouseup cancels the mouse move, maybe?
+                    [ Browser.onMouseMove (offsetPosition sel msg)
+                    , Browser.onMouseUp (offsetPosition { sel | mouseDown = False } msg)
+                    ]
+
+                else
+                    []
+        )
+
+
+{-| TODO support mousemove when outside of the region, this will probably require a subscription
+-}
+selection : Size -> Selection -> (Selection -> a) -> Range -> Method a
+selection size selected msg inverter data attr domainFunc rangeFunc =
+    let
+        sel =
+            case selected of
+                Selection s ->
+                    s
+
+        ( ( x1, y1 ), ( x2, y2 ) ) =
+            domainFunc
+
+        ( mx, my ) =
+            rangeFunc
+
+        ( ix, iy ) =
+            inverter
+
+        -- DRY up
+        offsetStart m =
+            Json.map4
+                (\oX oY x y ->
+                    { sel
+                        | mouseDown = True
+                        , offset =
+                            Just
+                                ( (oX - x) |> toFloat, (oY - y) |> toFloat )
+                        , box0 =
+                            Just
+                                ( (x |> toFloat) - size.marginLR, (y |> toFloat) - size.marginTB )
+                        , box1 = Nothing
+                    }
+                        |> Selection
+                        |> msg
+                )
+                (Json.field "pageX" Json.int)
+                (Json.field "pageY" Json.int)
+                (Json.field "offsetX" Json.int)
+                (Json.field "offsetY" Json.int)
+
+        events =
+            if sel.mouseDown == True then
+                []
+
+            else
+                [ E.on "mousedown" (offsetStart msg)
+                ]
+
+        clamp low hi value =
+            if value < low then
+                low
+
+            else if value > hi then
+                hi
+
+            else
+                value
+
+        highlight =
+            case ( sel.box0, sel.box1 ) of
+                ( Just ( ax1, ay1 ), Just ( bx1, by1 ) ) ->
+                    [ rect
+                        [ setAttr A.x (min ax1 bx1)
+                        , setAttr A.y (min ay1 by1)
+                        , setAttr width (ax1 - bx1 |> abs)
+                        , setAttr height (ay1 - by1 |> abs)
+                        , fill "rgba(255,0,0,0.5)"
+                        ]
+                        []
+                    ]
+
+                _ ->
+                    []
+    in
+    highlight
+        ++ [ rect
+                ([ setAttr A.x (mx x1)
+                 , setAttr A.y (my y2)
+                 , setAttr width (mx x2)
+                 , setAttr height (my y1)
+                 , fill "rgba(0,255,0,0.2)"
+                 ]
+                    ++ events
+                )
+                []
+           ]
