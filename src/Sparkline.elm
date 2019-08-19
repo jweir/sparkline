@@ -2,7 +2,7 @@ module Sparkline exposing
     ( sparkline, Param(..)
     , Point, DataSet, LabelSet, Size
     , Event(..), Selection, subscriptions
-    , createSelection
+    , Layer(..), createSelection, visualize
     )
 
 {-| This library is for generating inline graphs, called sparklines.
@@ -116,6 +116,7 @@ type Param a
     | Domain DataSet
     | Label (LabelSet a)
       -- options
+    | Highlight Selection
     | ZeroLine
     | Independent (Param a)
     | Style (List (Svg.Attribute a)) (Param a)
@@ -126,8 +127,6 @@ type Param a
 type alias Size =
     { width : Float
     , height : Float
-    , marginLR : Float
-    , marginTB : Float
     }
 
 
@@ -169,24 +168,42 @@ type alias Method a =
     -> List (Svg a)
 
 
+type Layer a
+    = Layer Size ( Float, Float ) (List (Event a)) (List (Param a))
+
+
 
 -- | Style (AttributeSet a)
 -- | Absolute List (Param a)
 -- by default data should be relative and in the same domain
 
 
+visualize : ( Float, Float ) -> List (Layer a) -> Svg a
+visualize ( w, h ) layers =
+    layers
+        |> List.map (\(Layer size ( x, y ) events params) -> foo size ( x, y ) events params)
+        |> frame (Size w h)
+
+
 {-| The entry point to create a graph. See Param.
 -}
 sparkline : Size -> List (Event a) -> List (Param a) -> Svg a
 sparkline size events params =
+    frame size [ foo size ( 0, 0 ) events params ]
+
+
+{-| The entry point to create a graph. See Param.
+-}
+foo : Size -> ( Float, Float ) -> List (Event a) -> List (Param a) -> Svg a
+foo size offset events params =
     let
-        tokens : List (TokenSet a)
-        tokens =
-            List.map tokenizer params
+        commands : List (CommandSet a)
+        commands =
+            List.map toCommand params
 
         domain_ : Domain
         domain_ =
-            tokens
+            commands
                 |> List.filter (\token -> token.indy /= True)
                 |> List.concatMap (\token -> [ token.data ])
                 |> domain
@@ -199,7 +216,7 @@ sparkline size events params =
         inverter =
             invert size domain_
 
-        collector : TokenSet a -> List (Svg a)
+        collector : CommandSet a -> List (Svg a)
         collector token =
             let
                 ( cdom, crange ) =
@@ -220,19 +237,22 @@ sparkline size events params =
                         case event of
                             Select sel msg ->
                                 selection size sel msg inverter [] [] domain_ range_
+
+                            SelectX sel msg ->
+                                selection size sel msg inverter [] [] domain_ range_
                     )
     in
-    tokens
+    commands
         |> List.concatMap collector
         |> List.append events_
-        |> frame size
+        |> layer offset
 
 
 type alias IndySet =
     Bool
 
 
-type alias TokenSet a =
+type alias CommandSet a =
     { method : Method a
     , data : DataSet
     , attributes : List (Svg.Attribute a)
@@ -240,23 +260,23 @@ type alias TokenSet a =
     }
 
 
-tokenizer : Param a -> TokenSet a
-tokenizer msg =
+toCommand : Param a -> CommandSet a
+toCommand msg =
     case msg of
         Bar width data ->
-            TokenSet (bar width) data [] False
+            CommandSet (bar width) data [] False
 
         Dot data ->
-            TokenSet dot data [] False
+            CommandSet dot data [] False
 
         Line data ->
-            TokenSet line data [] False
+            CommandSet line data [] False
 
         Area data ->
-            TokenSet area data [] False
+            CommandSet area data [] False
 
         Domain data ->
-            TokenSet noop data [] False
+            CommandSet noop data [] False
 
         Label labelSet ->
             let
@@ -264,44 +284,52 @@ tokenizer msg =
                 data =
                     List.map (\( p, _, _ ) -> p) labelSet
             in
-            TokenSet (label labelSet) data [] False
+            CommandSet (label labelSet) data [] False
 
+        -- options
         ZeroLine ->
-            TokenSet zeroLine [] [] False
+            CommandSet zeroLine [] [] False
 
         Independent msg_ ->
             let
                 token =
-                    tokenizer msg_
+                    toCommand msg_
             in
             { token | indy = True }
 
         Style attr msg_ ->
             let
                 token =
-                    tokenizer msg_
+                    toCommand msg_
             in
             { token | attributes = attr }
 
+        Highlight sel ->
+            CommandSet (highlight sel) [] [] False
+
 
 frame : Size -> List (Svg a) -> Svg a
-frame size items =
+frame size children =
     Svg.svg
-        [ setAttr A.width (size.width + 2 * size.marginLR)
-        , setAttr A.height (size.height + 2 * size.marginTB)
-        , joinAttr A.viewBox [ 0, 0, size.width + 2 * size.marginLR, size.height + 2 * size.marginTB ]
+        [ setAttr A.width (size.width + 2)
+        , setAttr A.height (size.height + 2)
+        , joinAttr A.viewBox [ 0, 0, size.width + 2, size.height + 2 ]
         ]
-        [ Svg.g
-            [ A.transform ("translate(" ++ String.fromFloat size.marginLR ++ "," ++ String.fromFloat size.marginTB ++ ")")
-            ]
-            items
+        children
+
+
+layer : ( Float, Float ) -> List (Svg a) -> Svg a
+layer ( x, y ) children =
+    Svg.g
+        [ A.transform ("translate(" ++ String.fromFloat x ++ "," ++ String.fromFloat y ++ ")")
         ]
+        children
 
 
 zeroLine : Method a
 zeroLine _ attr domainFunc rangeFunc =
     let
-        ( ( x1, y1 ), ( x2, y2 ) ) =
+        ( ( x1, _ ), ( x2, _ ) ) =
             domainFunc
     in
     line
@@ -501,9 +529,9 @@ range size ( ( x0, y0 ), ( x1, y1 ) ) =
 invert : Size -> Domain -> Range
 invert size ( ( x0, y0 ), ( x1, y1 ) ) =
     ( \x ->
-        ((x1 - x0) / size.width) * (x - size.marginLR) |> noNan
+        ((x1 - x0) / size.width) * x |> noNan
     , \y ->
-        (size.height * ((y1 - y0) / (y - size.marginTB))) |> noNan
+        (size.height * ((y1 - y0) / y)) |> noNan
     )
 
 
@@ -545,6 +573,7 @@ joinAttr fun n =
 -}
 type Event a
     = Select Selection (Selection -> a)
+    | SelectX Selection (Selection -> a)
 
 
 {-| TODO: document and make this private
@@ -597,15 +626,25 @@ subscriptions event =
                                 |> Selection
                                 |> msg
                         )
+
+        active sel msg =
+            -- order matters LIFO seems to be the rule, the mouseup cancels the mouse move, maybe?
+            [ Browser.onMouseMove (offsetPosition sel msg)
+            , Browser.onMouseUp (offsetPosition { sel | mouseDown = False } msg)
+            ]
     in
     Sub.batch
         (case event of
             Select (Selection sel) msg ->
                 if sel.mouseDown == True then
-                    -- order matters LIFO seems to be the rule, the mouseup cancels the mouse move, maybe?
-                    [ Browser.onMouseMove (offsetPosition sel msg)
-                    , Browser.onMouseUp (offsetPosition { sel | mouseDown = False } msg)
-                    ]
+                    active sel msg
+
+                else
+                    []
+
+            SelectX (Selection sel) msg ->
+                if sel.mouseDown == True then
+                    active sel msg
 
                 else
                     []
@@ -642,7 +681,7 @@ selection size selected msg inverter data attr domainFunc rangeFunc =
                                 ( (oX - x) |> toFloat, (oY - y) |> toFloat )
                         , box0 =
                             Just
-                                ( (x |> toFloat) - size.marginLR, (y |> toFloat) - size.marginTB )
+                                ( x |> toFloat, y |> toFloat )
                         , box1 = Nothing
                     }
                         |> Selection
@@ -661,17 +700,26 @@ selection size selected msg inverter data attr domainFunc rangeFunc =
                 [ E.on "mousedown" (offsetStart msg)
                 ]
 
-        clamp low hi value =
-            if value < low then
-                low
+        eventArea =
+            [ rect
+                ([ setAttr A.x (mx x1)
+                 , setAttr A.y (my y2)
+                 , setAttr width (mx x2)
+                 , setAttr height (my y1)
+                 , fill "rgba(0,0,0,0.0)"
+                 ]
+                    ++ events
+                )
+                []
+            ]
+    in
+    eventArea
 
-            else if value > hi then
-                hi
 
-            else
-                value
-
-        highlight =
+highlight : Selection -> Method a
+highlight selected _ _ domain_ range_ =
+    case selected of
+        Selection sel ->
             case ( sel.box0, sel.box1 ) of
                 ( Just ( ax1, ay1 ), Just ( bx1, by1 ) ) ->
                     [ rect
@@ -686,16 +734,3 @@ selection size selected msg inverter data attr domainFunc rangeFunc =
 
                 _ ->
                     []
-    in
-    highlight
-        ++ [ rect
-                ([ setAttr A.x (mx x1)
-                 , setAttr A.y (my y2)
-                 , setAttr width (mx x2)
-                 , setAttr height (my y1)
-                 , fill "rgba(0,255,0,0.2)"
-                 ]
-                    ++ events
-                )
-                []
-           ]
