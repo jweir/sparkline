@@ -82,12 +82,10 @@ There are also some options which can be applied to each graph:
 
   - **Domain** includes the given data into the graph's domain.
     This is useful when creating multiple graphs that need to have the same scale.
-  - **Independent** will scale this graph's dataset separately from the rest of the graphs.
   - **Style** allows applying `Svg.Attribute` styles to the rendered svg.
 
 Finally there is the **ZeroLine** param which will draw a line at the 0 y axis
-for the data. _This does not apply to any graphs rendered with
-**Independent.**_
+for the data.
 
 \*\*Examples\*
 
@@ -103,8 +101,8 @@ See Example.elm for more examples.
         -- graph the datasets to not be relative to one another.  The params can be piped.
         sparkline
             ( 200, 10, 5, 5 )
-            [ Line data |> Independent
-            , Line data2 |> Independent
+            [ Line data
+            , Line data2
             ]
 
 -}
@@ -118,7 +116,6 @@ type Param a
       -- options
     | Highlight Selection
     | ZeroLine
-    | Independent (Param a)
     | Style (List (Svg.Attribute a)) (Param a)
 
 
@@ -204,7 +201,6 @@ foo size offset events params =
         domain_ : Domain
         domain_ =
             commands
-                |> List.filter (\token -> token.indy /= True)
                 |> List.concatMap (\token -> [ token.data ])
                 |> domain
 
@@ -220,13 +216,7 @@ foo size offset events params =
         collector token =
             let
                 ( cdom, crange ) =
-                    if token.indy == True then
-                        ( domain [ token.data ]
-                        , range size (domain [ token.data ])
-                        )
-
-                    else
-                        ( domain_, range_ )
+                    ( domain_, range_ )
             in
             token.method token.data token.attributes cdom crange
 
@@ -236,15 +226,13 @@ foo size offset events params =
                     (\event ->
                         case event of
                             Select sel msg ->
-                                selection size sel msg inverter [] [] domain_ range_
-
-                            SelectX sel msg ->
-                                selection size sel msg inverter [] [] domain_ range_
+                                selection size offset sel msg inverter [] [] domain_ range_
                     )
     in
     commands
         |> List.concatMap collector
-        |> List.append events_
+        -- add the events to the end, so it is on top of the other elements
+        |> (\list -> list ++ events_)
         |> layer offset
 
 
@@ -256,7 +244,6 @@ type alias CommandSet a =
     { method : Method a
     , data : DataSet
     , attributes : List (Svg.Attribute a)
-    , indy : IndySet
     }
 
 
@@ -264,19 +251,19 @@ toCommand : Param a -> CommandSet a
 toCommand msg =
     case msg of
         Bar width data ->
-            CommandSet (bar width) data [] False
+            CommandSet (bar width) data []
 
         Dot data ->
-            CommandSet dot data [] False
+            CommandSet dot data []
 
         Line data ->
-            CommandSet line data [] False
+            CommandSet line data []
 
         Area data ->
-            CommandSet area data [] False
+            CommandSet area data []
 
         Domain data ->
-            CommandSet noop data [] False
+            CommandSet noop data []
 
         Label labelSet ->
             let
@@ -284,18 +271,11 @@ toCommand msg =
                 data =
                     List.map (\( p, _, _ ) -> p) labelSet
             in
-            CommandSet (label labelSet) data [] False
+            CommandSet (label labelSet) data []
 
         -- options
         ZeroLine ->
-            CommandSet zeroLine [] [] False
-
-        Independent msg_ ->
-            let
-                token =
-                    toCommand msg_
-            in
-            { token | indy = True }
+            CommandSet zeroLine [] []
 
         Style attr msg_ ->
             let
@@ -305,7 +285,7 @@ toCommand msg =
             { token | attributes = attr }
 
         Highlight sel ->
-            CommandSet (highlight sel) [] [] False
+            CommandSet (highlight sel) [] []
 
 
 frame : Size -> List (Svg a) -> Svg a
@@ -573,7 +553,6 @@ joinAttr fun n =
 -}
 type Event a
     = Select Selection (Selection -> a)
-    | SelectX Selection (Selection -> a)
 
 
 {-| TODO: document and make this private
@@ -591,15 +570,12 @@ type alias Selected =
 
     -- the bounding box in absolute size to the SVG graph
     , box1 : Maybe Point
-
-    -- the bounding box for the data x and y
-    , dataBounds : Maybe ( Point, Point )
     }
 
 
 createSelection : Selection
 createSelection =
-    Selection (Selected False Nothing Nothing Nothing Nothing)
+    Selection (Selected False Nothing Nothing Nothing)
 
 
 {-| The entry point to create a graph. See Param.
@@ -641,20 +617,13 @@ subscriptions event =
 
                 else
                     []
-
-            SelectX (Selection sel) msg ->
-                if sel.mouseDown == True then
-                    active sel msg
-
-                else
-                    []
         )
 
 
 {-| TODO support mousemove when outside of the region, this will probably require a subscription
 -}
-selection : Size -> Selection -> (Selection -> a) -> Range -> Method a
-selection size selected msg inverter data attr domainFunc rangeFunc =
+selection : Size -> Point -> Selection -> (Selection -> a) -> Range -> Method a
+selection size ( layerOffsetX, layerOffsetY ) selected msg inverter data attr domainFunc rangeFunc =
     let
         sel =
             case selected of
@@ -674,11 +643,15 @@ selection size selected msg inverter data attr domainFunc rangeFunc =
         offsetStart m =
             Json.map4
                 (\oX oY x y ->
+                    let
+                        _ =
+                            Debug.log "mouse" [ oX, oY, x, y ]
+                    in
                     { sel
                         | mouseDown = True
                         , offset =
                             Just
-                                ( (oX - x) |> toFloat, (oY - y) |> toFloat )
+                                ( ((oX - x) |> toFloat) + layerOffsetX, ((oY - y) |> toFloat) + layerOffsetY )
                         , box0 =
                             Just
                                 ( x |> toFloat, y |> toFloat )

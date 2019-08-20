@@ -74,7 +74,6 @@ view model =
         timeline =
             List.repeat 10 ( x0, 10 )
                 |> List.indexedMap (\i ( x, y ) -> ( x + (toFloat i * delta), y ))
-                |> Debug.log "timeline"
     in
     Html.div []
         [ Html.div []
@@ -118,7 +117,7 @@ view model =
                                     )
                                 )
                         )
-                        |> Style [ Svg.fill "black", Svg.fontFamily "arial", Svg.fontSize "10px", Svg.dx "2", Svg.dy "2", Svg.textAnchor "middle" ]
+                        |> Style [ Svg.fontSize "10px", Svg.dx "2", Svg.dy "2", Svg.textAnchor "middle" ]
                     ]
                 ]
             , sparkline
@@ -126,6 +125,7 @@ view model =
                 [ Sparkline.Select model.selection2 GraphEvent2 ]
                 [ Line [ ( 0, 10 ), ( 10, 10 ), ( 20, 30 ) ]
                 , Line [ ( 0, 2 ), ( 10, 4 ), ( 20, 20 ), ( 30, 40 ), ( 100, 35 ) ]
+                , Highlight model.selection2
                 ]
             ]
         ]
