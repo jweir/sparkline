@@ -2,7 +2,7 @@ module Sparkline exposing
     ( sparkline, Param(..)
     , Point, DataSet, LabelSet, Size
     , Event(..), Selection, subscriptions
-    , Layer(..), createSelection, visualize
+    , Layer(..), createSelection, invert, visualize
     )
 
 {-| This library is for generating inline graphs, called sparklines.
@@ -160,9 +160,19 @@ type alias Domain =
 type alias Method a =
     DataSet
     -> List (Svg.Attribute a)
-    -> Domain
-    -> Range
+    -> Scalar
     -> List (Svg a)
+
+
+type alias Scalar =
+    { domain : Domain
+
+    -- range scales from the orginal data to the coordinates on the sized canvas
+    , range : Range
+
+    -- invert does the opposite of range
+    , inverter : Range
+    }
 
 
 type Layer a
@@ -178,7 +188,7 @@ type Layer a
 visualize : ( Float, Float ) -> List (Layer a) -> Svg a
 visualize ( w, h ) layers =
     layers
-        |> List.map (\(Layer size ( x, y ) events params) -> foo size ( x, y ) events params)
+        |> List.map (\(Layer size ( x, y ) events params) -> convert size ( x, y ) events params)
         |> frame (Size w h)
 
 
@@ -186,13 +196,13 @@ visualize ( w, h ) layers =
 -}
 sparkline : Size -> List (Event a) -> List (Param a) -> Svg a
 sparkline size events params =
-    frame size [ foo size ( 0, 0 ) events params ]
+    frame size [ convert size ( 0, 0 ) events params ]
 
 
 {-| The entry point to create a graph. See Param.
 -}
-foo : Size -> ( Float, Float ) -> List (Event a) -> List (Param a) -> Svg a
-foo size offset events params =
+convert : Size -> ( Float, Float ) -> List (Event a) -> List (Param a) -> Svg a
+convert size offset events params =
     let
         commands : List (CommandSet a)
         commands =
@@ -209,16 +219,15 @@ foo size offset events params =
         range_ =
             range size domain_
 
-        inverter =
-            invert size domain_
+        scalar =
+            { domain = domain_
+            , range = range_
+            , inverter = invert size domain_
+            }
 
         collector : CommandSet a -> List (Svg a)
         collector token =
-            let
-                ( cdom, crange ) =
-                    ( domain_, range_ )
-            in
-            token.method token.data token.attributes cdom crange
+            token.method token.data token.attributes scalar
 
         events_ =
             events
@@ -226,7 +235,7 @@ foo size offset events params =
                     (\event ->
                         case event of
                             Select sel msg ->
-                                selection size offset sel msg inverter [] [] domain_ range_
+                                selection size offset sel msg scalar
                     )
     in
     commands
@@ -307,30 +316,29 @@ layer ( x, y ) children =
 
 
 zeroLine : Method a
-zeroLine _ attr domainFunc rangeFunc =
+zeroLine _ attr scalar =
     let
         ( ( x1, _ ), ( x2, _ ) ) =
-            domainFunc
+            scalar.domain
     in
     line
         [ ( x1, 0 ), ( x2, 0 ) ]
         attr
-        domainFunc
-        rangeFunc
+        scalar
 
 
 noop : Method a
-noop data attr _ _ =
+noop data attr _ =
     []
 
 
 line : Method a
-line data attr _ rangeFunc =
+line data attr scalar =
     [ Svg.path
         ([ fill "none"
          , stroke "#000"
          , setAttr strokeWidth 1
-         , d (path rangeFunc data)
+         , d (path scalar.range data)
          ]
             ++ attr
         )
@@ -339,10 +347,10 @@ line data attr _ rangeFunc =
 
 
 area : Method a
-area data attr domainFunc rangeFunc =
+area data attr scalar =
     let
         ( ( minx, miny ), ( maxx, maxy ) ) =
-            domainFunc
+            scalar.domain
 
         p0 =
             ( minx, miny )
@@ -353,13 +361,13 @@ area data attr domainFunc rangeFunc =
         cappedData =
             [ p0 ] ++ data ++ [ p1 ]
     in
-    line cappedData attr domainFunc rangeFunc
+    line cappedData attr scalar
 
 
 dot : Method a
-dot data attr _ rangeFunc =
+dot data attr scalar =
     data
-        |> scale rangeFunc
+        |> scale scalar.range
         |> List.map
             (\( x, y ) ->
                 circle
@@ -374,7 +382,14 @@ dot data attr _ rangeFunc =
 
 
 bar : Float -> Method a
-bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
+bar w data attr scalar =
+    let
+        ( ( x0, y0 ), ( x1, y1 ) ) =
+            scalar.domain
+
+        ( mx, my ) =
+            scalar.range
+    in
     data
         |> List.map
             (\( x, y ) ->
@@ -404,13 +419,13 @@ bar w data attr ( ( x0, y0 ), ( x1, y1 ) ) ( mx, my ) =
 
 
 label : LabelSet a -> Method a
-label labels data styled ( ( x0, y0 ), ( x1, y1 ) ) rangeFunc =
+label labels data styled scalar =
     let
         indexed =
             labels |> Array.fromList
     in
     data
-        |> scale rangeFunc
+        |> scale scalar.range
         |> Array.fromList
         |> Array.toIndexedList
         |> List.concatMap
@@ -509,9 +524,9 @@ range size ( ( x0, y0 ), ( x1, y1 ) ) =
 invert : Size -> Domain -> Range
 invert size ( ( x0, y0 ), ( x1, y1 ) ) =
     ( \x ->
-        ((x1 - x0) / size.width) * x |> noNan
+        (x / size.width) * (x1 - x0) + x0 |> noNan
     , \y ->
-        (size.height * ((y1 - y0) / y)) |> noNan
+        (y / size.height) * (y1 - y0) + y0 |> noNan
     )
 
 
@@ -552,7 +567,7 @@ joinAttr fun n =
 {-| TODO: document
 -}
 type Event a
-    = Select Selection (Selection -> a)
+    = Select Selection (Maybe ( Point, Point ) -> Selection -> a)
 
 
 {-| TODO: document and make this private
@@ -563,19 +578,21 @@ type Selection
 
 type alias Selected =
     { mouseDown : Bool
+    , size : Size
 
     -- the starting point on the page
     , offset : Maybe Point
-    , box0 : Maybe Point
+    , start : Maybe Point
 
     -- the bounding box in absolute size to the SVG graph
-    , box1 : Maybe Point
+    , current : Maybe Point
+    , scalar : Maybe Scalar
     }
 
 
 createSelection : Selection
 createSelection =
-    Selection (Selected False Nothing Nothing Nothing)
+    Selection (Selected False (Size 0 0) Nothing Nothing Nothing Nothing)
 
 
 {-| The entry point to create a graph. See Param.
@@ -593,14 +610,47 @@ subscriptions event =
         offsetPosition sel msg =
             case sel.offset of
                 Nothing ->
-                    Json.succeed (sel |> Selection |> msg)
+                    Json.succeed (sel |> Selection |> msg Nothing)
 
                 Just ( x0, y0 ) ->
                     map
                         (\x y ->
-                            { sel | box1 = Just ( (x |> toFloat) - x0, (y |> toFloat) - y0 ) }
+                            let
+                                sel_ =
+                                    { sel | current = Just ( (x |> toFloat) - x0, (y |> toFloat) - y0 ) }
+
+                                dataBound =
+                                    case sel.scalar of
+                                        Nothing ->
+                                            Nothing
+
+                                        Just scalar ->
+                                            case ( sel.start, sel.current ) of
+                                                ( Just ( dx0, dy0 ), Just ( dx1, dy1 ) ) ->
+                                                    let
+                                                        ( ix, iy ) =
+                                                            scalar.inverter
+
+                                                        _ =
+                                                            Debug.log "" [ sel.start, sel.current, sel.offset ]
+
+                                                        ( bx0, by0 ) =
+                                                            ( ix dx0, iy (dy0 - sel.size.height |> abs) )
+
+                                                        ( bx1, by1 ) =
+                                                            ( ix dx1, iy (dy1 - sel.size.height |> abs) )
+                                                    in
+                                                    Just
+                                                        ( ( min bx0 bx1, min by0 by1 )
+                                                        , ( max bx0 bx1, max by0 by1 )
+                                                        )
+
+                                                _ ->
+                                                    Nothing
+                            in
+                            sel_
                                 |> Selection
-                                |> msg
+                                |> msg dataBound
                         )
 
         active sel msg =
@@ -622,8 +672,8 @@ subscriptions event =
 
 {-| TODO support mousemove when outside of the region, this will probably require a subscription
 -}
-selection : Size -> Point -> Selection -> (Selection -> a) -> Range -> Method a
-selection size ( layerOffsetX, layerOffsetY ) selected msg inverter data attr domainFunc rangeFunc =
+selection : Size -> Point -> Selection -> (Maybe ( Point, Point ) -> Selection -> a) -> Scalar -> List (Svg.Svg a)
+selection size ( layerOffsetX, layerOffsetY ) selected msg scalar =
     let
         sel =
             case selected of
@@ -631,34 +681,32 @@ selection size ( layerOffsetX, layerOffsetY ) selected msg inverter data attr do
                     s
 
         ( ( x1, y1 ), ( x2, y2 ) ) =
-            domainFunc
+            scalar.domain
 
         ( mx, my ) =
-            rangeFunc
+            scalar.range
 
         ( ix, iy ) =
-            inverter
+            scalar.inverter
 
         -- DRY up
         offsetStart m =
             Json.map4
                 (\oX oY x y ->
-                    let
-                        _ =
-                            Debug.log "mouse" [ oX, oY, x, y ]
-                    in
                     { sel
-                        | mouseDown = True
+                        | scalar = Just scalar
+                        , mouseDown = True
+                        , size = size
                         , offset =
                             Just
                                 ( ((oX - x) |> toFloat) + layerOffsetX, ((oY - y) |> toFloat) + layerOffsetY )
-                        , box0 =
+                        , start =
                             Just
-                                ( x |> toFloat, y |> toFloat )
-                        , box1 = Nothing
+                                ( (x |> toFloat) - layerOffsetX, (y |> toFloat) - layerOffsetY )
+                        , current = Nothing
                     }
                         |> Selection
-                        |> msg
+                        |> msg Nothing
                 )
                 (Json.field "pageX" Json.int)
                 (Json.field "pageY" Json.int)
@@ -679,7 +727,7 @@ selection size ( layerOffsetX, layerOffsetY ) selected msg inverter data attr do
                  , setAttr A.y (my y2)
                  , setAttr width (mx x2)
                  , setAttr height (my y1)
-                 , fill "rgba(0,0,0,0.0)"
+                 , fill "rgba(0,0,0,0.1)"
                  ]
                     ++ events
                 )
@@ -690,10 +738,10 @@ selection size ( layerOffsetX, layerOffsetY ) selected msg inverter data attr do
 
 
 highlight : Selection -> Method a
-highlight selected _ _ domain_ range_ =
+highlight selected _ _ scalar =
     case selected of
         Selection sel ->
-            case ( sel.box0, sel.box1 ) of
+            case ( sel.start, sel.current ) of
                 ( Just ( ax1, ay1 ), Just ( bx1, by1 ) ) ->
                     [ rect
                         [ setAttr A.x (min ax1 bx1)
